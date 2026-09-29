@@ -19,3 +19,9 @@ automatically.
 ## Automation status
 
 This line was added by a real end-to-end test of the release notes automation.
+
+## Test 2
+
+Second real end-to-end test, after fixing the WIF auth step's missing
+`token_format: access_token` (test 1, PR #1, failed with a 401 because
+of that bug).
