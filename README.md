@@ -10,8 +10,12 @@ Design and full build status live in the
 `feature_list.json`) — this repo is just the pilot target, not the source of
 truth for the pipeline itself.
 
-**Status as of 2026-09-29:** the workflow below is pushed but not yet live -
-`RELEASE_NOTES_ENDPOINT` and `RELEASE_NOTES_TOKEN` aren't set yet (they
-depend on `automation-003`, the Application Integration flow, which doesn't
-exist yet). Until those secrets exist, a merge here will trigger the
-workflow but the `curl` step will fail harmlessly (no endpoint to call).
+**Status as of 2026-09-30:** live. The workflow authenticates via Workload
+Identity Federation (no stored secret) and calls the
+`release-notes-orchestrator` Application Integration flow directly. A merge
+to `main` here creates and publishes a real, versioned GitHub Release
+automatically.
+
+## Automation status
+
+This line was added by a real end-to-end test of the release notes automation.
