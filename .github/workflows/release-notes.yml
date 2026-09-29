@@ -8,6 +8,12 @@
 # in the event payload. The GitHub write (creating the tag and the Release)
 # happens inside the orchestrator, using a separate, narrower credential
 # (a fine-grained PAT), never this workflow's own token.
+#
+# token_format: 'access_token' is required on the auth step below - without
+# it, google-github-actions/auth@v2 sets up an ADC credentials file but
+# leaves steps.auth.outputs.access_token empty, which silently produces
+# "Authorization: Bearer " (no token) and a 401 CREDENTIALS_MISSING from
+# Google's API. Found via a real end-to-end test on 2026-09-30.
 
 name: Release notes (auto)
 
@@ -29,6 +35,7 @@ jobs:
         with:
           workload_identity_provider: 'projects/238017122334/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: '238017122334-compute@developer.gserviceaccount.com'
+          token_format: 'access_token'
 
       - name: Call the release notes orchestrator
         env:
