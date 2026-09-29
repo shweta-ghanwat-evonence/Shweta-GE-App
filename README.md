@@ -15,3 +15,7 @@ truth for the pipeline itself.
 depend on `automation-003`, the Application Integration flow, which doesn't
 exist yet). Until those secrets exist, a merge here will trigger the
 workflow but the `curl` step will fail harmlessly (no endpoint to call).
+
+## Automation status
+
+This line was added by a real end-to-end test of the release notes automation.
