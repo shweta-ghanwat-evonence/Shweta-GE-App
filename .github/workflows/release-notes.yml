@@ -1,0 +1,45 @@
+# Pilot version - self-contained rather than calling a central reusable
+# workflow, since no <org>/release-automation repo exists yet (open question
+# #9 in docs/automation.md, LowCodeAgent repo). Once a second repo needs
+# onboarding, extract this into a reusable workflow and replace this file
+# with the thin stub (see templates/github/release-notes-caller.yml there).
+#
+# Needs no GitHub write permission - it only forwards data GitHub already
+# put in the event payload. The actual GitHub write (creating the tag and
+# publishing the Release) happens in Application Integration, using a
+# separate, narrower GitHub App credential - never this workflow's own token.
+#
+# RELEASE_NOTES_ENDPOINT / RELEASE_NOTES_TOKEN: repo secrets, not yet set.
+# Set once automation-003 (the Application Integration flow) exists.
+
+name: Release notes (auto)
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  release-notes:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Forward the merged PR to the release notes orchestrator
+        env:
+          RELEASE_NOTES_ENDPOINT: ${{ secrets.RELEASE_NOTES_ENDPOINT }}
+          RELEASE_NOTES_TOKEN: ${{ secrets.RELEASE_NOTES_TOKEN }}
+          PR_JSON: ${{ toJson(github.event.pull_request) }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_NOTES_ENDPOINT:-}" ]; then
+            echo "RELEASE_NOTES_ENDPOINT not set yet - automation-003 isn't built. Skipping (not a failure)."
+            exit 0
+          fi
+          payload="$(jq -n --arg repo "$REPO" --argjson pr "$PR_JSON" '{repo: $repo, pull_request: $pr}')"
+          curl -sS --fail-with-body \
+            -X POST "$RELEASE_NOTES_ENDPOINT" \
+            -H "Authorization: Bearer $RELEASE_NOTES_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
