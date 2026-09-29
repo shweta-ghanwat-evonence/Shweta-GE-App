@@ -1,16 +1,13 @@
-# Pilot version - self-contained rather than calling a central reusable
-# workflow, since no <org>/release-automation repo exists yet (open question
-# #9 in docs/automation.md, LowCodeAgent repo). Once a second repo needs
-# onboarding, extract this into a reusable workflow and replace this file
-# with the thin stub (see templates/github/release-notes-caller.yml there).
+# Calls the release-notes-orchestrator Application Integration flow directly
+# via its execute API, authenticated through Workload Identity Federation -
+# no stored secret at all (see docs/decisions.md in the LowCodeAgent repo,
+# 2026-09-30 entries, for the full setup and the invocation format this was
+# confirmed against via live testing).
 #
-# Needs no GitHub write permission - it only forwards data GitHub already
-# put in the event payload. The actual GitHub write (creating the tag and
-# publishing the Release) happens in Application Integration, using a
-# separate, narrower GitHub App credential - never this workflow's own token.
-#
-# RELEASE_NOTES_ENDPOINT / RELEASE_NOTES_TOKEN: repo secrets, not yet set.
-# Set once automation-003 (the Application Integration flow) exists.
+# Needs no GitHub write permission - only forwards data GitHub already put
+# in the event payload. The GitHub write (creating the tag and the Release)
+# happens inside the orchestrator, using a separate, narrower credential
+# (a fine-grained PAT), never this workflow's own token.
 
 name: Release notes (auto)
 
@@ -18,28 +15,40 @@ on:
   pull_request:
     types: [closed]
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   release-notes:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Forward the merged PR to the release notes orchestrator
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/238017122334/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: '238017122334-compute@developer.gserviceaccount.com'
+
+      - name: Call the release notes orchestrator
         env:
-          RELEASE_NOTES_ENDPOINT: ${{ secrets.RELEASE_NOTES_ENDPOINT }}
-          RELEASE_NOTES_TOKEN: ${{ secrets.RELEASE_NOTES_TOKEN }}
           PR_JSON: ${{ toJson(github.event.pull_request) }}
           REPO: ${{ github.repository }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           set -euo pipefail
-          if [ -z "${RELEASE_NOTES_ENDPOINT:-}" ]; then
-            echo "RELEASE_NOTES_ENDPOINT not set yet - automation-003 isn't built. Skipping (not a failure)."
-            exit 0
-          fi
-          payload="$(jq -n --arg repo "$REPO" --argjson pr "$PR_JSON" '{repo: $repo, pull_request: $pr}')"
-          curl -sS --fail-with-body \
-            -X POST "$RELEASE_NOTES_ENDPOINT" \
-            -H "Authorization: Bearer $RELEASE_NOTES_TOKEN" \
+          payload=$(jq -n \
+            --arg repo "$REPO" \
+            --arg pr "$PR_JSON" \
+            '{
+              triggerId: "api_trigger/release-notes-orchestrator_API_1",
+              inputParameters: {
+                repo: { stringValue: $repo },
+                pull_request: { jsonValue: $pr }
+              }
+            }')
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
+            "https://us-central1-integrations.googleapis.com/v1/projects/project-4-workndemos/locations/us-central1/integrations/release-notes-orchestrator:execute" \
             -d "$payload"
